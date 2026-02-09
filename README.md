@@ -21,8 +21,8 @@ This project provides a Docker-based development environment for WordPress. It a
 1. Clone this repository:
 
 ```
-git clone https://github.com/jswebschmiede/docker-wordpress-starter.git
-cd docker-wordpress
+git clone https://github.com/jswebschmiede/docker-wordpress-starter.git <your-project-name>
+cd <your-project-name>
 ```
 
 2. Copy the `.env.example` file to `.env` and adjust the values as needed:
