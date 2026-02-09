@@ -15,6 +15,7 @@ services:
         depends_on:
             wordpressdb:
                 condition: service_healthy
+        user: ${UID:-1000}:${GID:-1000}
         volumes:
             - ./wordpress:/var/www/html
             - ./docker/php/conf.d/uploads.ini:/usr/local/etc/php/conf.d/custom.ini

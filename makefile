@@ -18,6 +18,65 @@ log:
 reset: down
 	-@rm -rf db wordpress
 
+plugins-reset:
+	-@mkdir -p wordpress/wp-content/plugins
+	-@find wordpress/wp-content/plugins -mindepth 1 -maxdepth 1 ! -name 'index.php' -exec rm -rf {} +
+
+themes-reset:
+	-@mkdir -p wordpress/wp-content/themes
+	@set -e; \
+	keep=" $(THEMES_KEEP) "; \
+	for path in wordpress/wp-content/themes/*; do \
+		[ -e "$$path" ] || continue; \
+		name=$$(basename "$$path"); \
+		if [ "$$name" = "index.php" ]; then \
+			continue; \
+		fi; \
+		case "$$keep" in \
+			*" $$name "*) echo "Keeping theme $$name" ;; \
+			*) rm -rf "$$path" ;; \
+		esac; \
+	done
+
+plugins-install:
+	-@mkdir -p wordpress/wp-content/plugins
+	@set -e; \
+	for url in $(PLUGINS_GIT_URLS); do \
+		clean_url=$$(printf '%s' "$$url" | sed -E 's#/*$$##'); \
+		name=$${clean_url##*/}; \
+		name=$${name##*:}; \
+		name=$${name%.git}; \
+		dest="wordpress/wp-content/plugins/$$name"; \
+		if [ -d "$$dest/.git" ]; then \
+			echo "Updating plugin $$name"; \
+			git -C "$$dest" pull --ff-only; \
+		else \
+			echo "Cloning plugin $$name"; \
+			git clone "$$clean_url" "$$dest"; \
+		fi; \
+	done
+
+themes-install:
+	-@mkdir -p wordpress/wp-content/themes
+	@set -e; \
+	for url in $(THEMES_GIT_URLS); do \
+		clean_url=$$(printf '%s' "$$url" | sed -E 's#/*$$##'); \
+		name=$${clean_url##*/}; \
+		name=$${name##*:}; \
+		name=$${name%.git}; \
+		dest="wordpress/wp-content/themes/$$name"; \
+		if [ -d "$$dest/.git" ]; then \
+			echo "Updating theme $$name"; \
+			git -C "$$dest" pull --ff-only; \
+		else \
+			echo "Cloning theme $$name"; \
+			git clone "$$clean_url" "$$dest"; \
+		fi; \
+	done
+
+content-install: plugins-install themes-install
+content-reset: plugins-reset themes-reset
+
 start: validate
 	@clear
 	@printf "\033[1;33m%s\033[0m\n\n" "To start your site, please jump to http://127.0.0.1:${WEB_PORT}"
