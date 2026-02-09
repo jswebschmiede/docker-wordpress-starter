@@ -16,7 +16,7 @@ log:
 	-@UID=$$(id -u) GID=$$(id -g) docker compose logs
 
 reset: down
-	-@rm -rf db wordpress
+	-@sudo rm -rf db wordpress
 
 plugins-reset:
 	-@mkdir -p wordpress/wp-content/plugins
