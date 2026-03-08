@@ -77,20 +77,58 @@ themes-install:
 content-install: plugins-install themes-install
 content-reset: plugins-reset themes-reset
 
+install-wp: validate
+	@echo "Waiting for WordPress to be ready..."
+	@sleep 5
+	@if UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp core is-installed --allow-root 2>/dev/null; then \
+		echo "WordPress already installed."; \
+	else \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp core install \
+			--url="$(WP_URL)" \
+			--title="$(PROJECT_NAME)" \
+			--admin_user="$(WP_ADMIN_USER)" \
+			--admin_password="$(WP_ADMIN_PASSWORD)" \
+			--admin_email="$(WP_ADMIN_EMAIL)" \
+			--skip-email \
+			--allow-root; \
+		echo "WordPress installed. Admin user: $(WP_ADMIN_USER)"; \
+	fi
+	@if [ -n "$(WP_LANG)" ]; then \
+		echo "Installing and activating language $(WP_LANG)..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp language core install $(WP_LANG) --activate --allow-root; \
+	fi
+
+install-plugins-slugs:
+	@set -e; \
+	for slug in $(PLUGINS_SLUGS); do \
+		[ -n "$$slug" ] || continue; \
+		echo "Installing and activating plugin $$slug..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp plugin install $$slug --activate --allow-root; \
+	done
+
+activate-theme:
+	@theme=$$(echo "$(THEMES_KEEP)" | awk '{print $$1}'); \
+	if [ -n "$$theme" ]; then \
+		echo "Activating theme $$theme..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp theme activate $$theme --allow-root; \
+	fi
+
+wp:
+	@UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp $(filter-out $@,$(MAKECMDGOALS)) --allow-root
+
 start: validate
 	@clear
 	@printf "\033[1;33m%s\033[0m\n\n" "To start your site, please jump to http://127.0.0.1:${WEB_PORT}"
 	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:${WEB_PORT}/wp-admin to open your backend."
 	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:8080 to open phpMyAdmin."
-	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:8025 to open MailHog."
-
+	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:8025 to open Mailpit."
+	@printf "\033[1;33m%s\033[0m\n\n" "First run or reset: use 'make wp-fresh-start' to install WordPress and content."
 	@printf "\033[1;104m%s\033[0m\n\n" "Below a summary of your current installation:"
-
 	@printf "\033[1;34m%s\033[0m\n\n" "WORDPRESS"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Project name" "${PROJECT_NAME}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${WORDPRESS_VERSION}"
-	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n\n" " * Port" "${WEB_PORT}"
-
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Port" "${WEB_PORT}"
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n\n" " * Fresh install" "make wp-fresh-start"
 	@printf "\033[1;34m%s\033[0m\n\n" "DATABASE"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Host" "wordpressdb"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * User name" "${DB_USER}"
@@ -98,12 +136,10 @@ start: validate
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Database name" "${DB_NAME}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${MYSQL_VERSION}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n\n" " * Port" "${MYSQL_PORT}"
-
 	@printf "\033[1;34m%s\033[0m\n\n" "PHPMYADMIN"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${PHPMYADMIN_VERSION}"
-
-	@printf "\033[1;34m%s\033[0m\n\n" "MAILHOG"
-	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${MAILHOG_VERSION}"
+	@printf "\033[1;34m%s\033[0m\n\n" "MAILPIT"
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${MAILPIT_VERSION}"
 
 stop:
 	-@UID=$$(id -u) GID=$$(id -g) docker compose stop
@@ -111,3 +147,14 @@ stop:
 up: validate
 	-@mkdir -p db wordpress
 	@UID=$$(id -u) GID=$$(id -g) docker compose up --detach
+
+wp-fresh-start: up
+	@$(MAKE) install-wp
+	@$(MAKE) content-reset
+	@$(MAKE) content-install
+	@$(MAKE) install-plugins-slugs
+	@$(MAKE) activate-theme
+	@echo "Fresh start complete. Content reset and reinstalled from PLUGINS_GIT_URLS / THEMES_GIT_URLS."
+
+%:
+	@:

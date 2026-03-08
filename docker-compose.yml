@@ -22,6 +22,29 @@ services:
         networks:
             - wordpress_network
 
+    wpcli:
+        image: wordpress:cli-${WORDPRESS_CLI_VERSION:-php8.3}
+        container_name: ${CONTAINER_PREFIX:-wordpress}-wpcli
+        user: ${UID:-1000}:${GID:-1000}
+        volumes:
+            - ./wordpress:/var/www/html
+        environment:
+            - WORDPRESS_DB_HOST=wordpressdb
+            - WORDPRESS_DB_NAME=${DB_NAME:-wordpress}
+            - WORDPRESS_DB_USER=${DB_USER:-wordpress}
+            - WORDPRESS_DB_PASSWORD=${DB_PASSWORD:-examplepass}
+            - WP_CLI_CACHE_DIR=/var/www/html/.wp-cli-cache
+            - WP_CLI_ALLOW_ROOT=1
+        depends_on:
+            wordpressdb:
+                condition: service_healthy
+            wordpress:
+                condition: service_started
+        networks:
+            - wordpress_network
+        profiles:
+            - cli
+
     wordpressdb:
         image: mysql:${MYSQL_VERSION:-8.4.2}
         container_name: ${CONTAINER_PREFIX:-wordpress}-db
@@ -54,9 +77,9 @@ services:
         networks:
             - wordpress_network
 
-    mailhog:
-        image: mailhog/mailhog:${MAILHOG_VERSION:-latest}
-        container_name: ${CONTAINER_PREFIX:-wordpress}-mailhog
+    mailpit:
+        image: axllent/mailpit:${MAILPIT_VERSION:-latest}
+        container_name: ${CONTAINER_PREFIX:-wordpress}-mailpit
         restart: always
         ports:
             - 1025:1025
