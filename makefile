@@ -128,6 +128,8 @@ start: validate
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Project name" "${PROJECT_NAME}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${WORDPRESS_VERSION}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Port" "${WEB_PORT}"
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Admin user" "${WP_ADMIN_USER}"
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Admin password" "${WP_ADMIN_PASSWORD}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n\n" " * Fresh install" "make wp-fresh-start"
 	@printf "\033[1;34m%s\033[0m\n\n" "DATABASE"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Host" "wordpressdb"
