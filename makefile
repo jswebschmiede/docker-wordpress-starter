@@ -93,6 +93,25 @@ install-wp: validate
 			--allow-root; \
 		echo "WordPress installed. Admin user: $(WP_ADMIN_USER)"; \
 	fi
+	@if [ -n "$(WP_LANG)" ]; then \
+		echo "Installing and activating language $(WP_LANG)..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp language core install $(WP_LANG) --activate --allow-root; \
+	fi
+
+install-plugins-slugs:
+	@set -e; \
+	for slug in $(PLUGINS_SLUGS); do \
+		[ -n "$$slug" ] || continue; \
+		echo "Installing and activating plugin $$slug..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp plugin install $$slug --activate --allow-root; \
+	done
+
+activate-theme:
+	@theme=$$(echo "$(THEMES_KEEP)" | awk '{print $$1}'); \
+	if [ -n "$$theme" ]; then \
+		echo "Activating theme $$theme..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp theme activate $$theme --allow-root; \
+	fi
 
 wp:
 	@UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp $(filter-out $@,$(MAKECMDGOALS)) --allow-root
@@ -133,6 +152,8 @@ wp-fresh-start: up
 	@$(MAKE) install-wp
 	@$(MAKE) content-reset
 	@$(MAKE) content-install
+	@$(MAKE) install-plugins-slugs
+	@$(MAKE) activate-theme
 	@echo "Fresh start complete. Content reset and reinstalled from PLUGINS_GIT_URLS / THEMES_GIT_URLS."
 
 %:

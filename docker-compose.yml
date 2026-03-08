@@ -33,6 +33,8 @@ services:
             - WORDPRESS_DB_NAME=${DB_NAME:-wordpress}
             - WORDPRESS_DB_USER=${DB_USER:-wordpress}
             - WORDPRESS_DB_PASSWORD=${DB_PASSWORD:-examplepass}
+            - WP_CLI_CACHE_DIR=/var/www/html/.wp-cli-cache
+            - WP_CLI_ALLOW_ROOT=1
         depends_on:
             wordpressdb:
                 condition: service_healthy

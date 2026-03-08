@@ -29,7 +29,7 @@ cp .env.example .env
 make wp-fresh-start
 ```
 
-`make wp-fresh-start` starts the stack, installs WordPress with admin user from `.env`, resets plugins/themes, and reinstalls from `PLUGINS_GIT_URLS` / `THEMES_GIT_URLS`. Open http://127.0.0.1:6969/wp-admin and log in with `WP_ADMIN_USER` / `WP_ADMIN_PASSWORD`.
+`make wp-fresh-start` starts the stack, installs WordPress with admin user from `.env`, resets plugins/themes, and reinstalls from `PLUGINS_GIT_URLS` / `THEMES_GIT_URLS`. Optional `.env` options: `WP_LANG` (e.g. `de_DE` for German), `PLUGINS_SLUGS` (space-separated plugin slugs from wordpress.org, installed and activated), `THEMES_KEEP` (first theme is auto-activated). Open http://127.0.0.1:6969/wp-admin and log in with `WP_ADMIN_USER` / `WP_ADMIN_PASSWORD`.
 
 - `make up` – Start containers only. Fast, no WP setup.
 - `make install-wp` – Install WordPress manually (e.g. after `make reset`). Skips if already installed.
@@ -59,6 +59,8 @@ make wp -- theme list
 
 - `make plugins-reset`: Clears `wordpress/wp-content/plugins` (keeps `index.php` if present)
 - `make themes-reset`: Clears `wordpress/wp-content/themes` (keeps `index.php` and the slugs in `THEMES_KEEP`)
+- `make activate-theme`: Activates the first theme from `THEMES_KEEP` (runs automatically at end of `wp-fresh-start`)
+- `make install-plugins-slugs`: Installs and activates plugins from `PLUGINS_SLUGS` via wordpress.org (runs after content-install in `wp-fresh-start`)
 - `make plugins-install`: Clones or updates repositories from `PLUGINS_GIT_URLS` into `wp-content/plugins`
 - `make themes-install`: Clones or updates repositories from `THEMES_GIT_URLS` into `wp-content/themes`
 - `make content-install`: Runs `plugins-install` and `themes-install`
@@ -67,7 +69,7 @@ make wp -- theme list
 ## Structure
 
 - `docker-compose.yml` – WordPress, MySQL, phpMyAdmin, Mailpit, WP-CLI service
-- `.env.example` – Template with `WP_ADMIN_*` variables for `make install-wp`
+- `.env.example` – Template with `WP_ADMIN_*`, `WP_LANG`, `PLUGINS_SLUGS`, `THEMES_KEEP` for `make install-wp`
 - `makefile` – `install-wp` (runs wp core install), `wp` (pass-through for any WP-CLI command)
 - `wordpress/` – WordPress files (created on first start)
 - `db/` – Database files (created on first start)
@@ -84,6 +86,10 @@ make wp -- theme list
 ## Customization
 
 You can customize the configuration in the `.env` file to change ports, versions, and other settings. Ensure `WP_URL` matches your actual URL (e.g. `http://127.0.0.1:6969` when using default `WEB_PORT`).
+
+- `WP_LANG`: Locale code for WordPress core (e.g. `de_DE` for German, `en_US` default). Installed and activated during `install-wp`.
+- `PLUGINS_SLUGS`: Space-separated plugin slugs from wordpress.org (e.g. `akismet contact-form-7`). Plugins are installed and activated after `content-install` in `wp-fresh-start`.
+- `THEMES_KEEP`: Space-separated theme slugs kept during `themes-reset`. The first slug is activated automatically after `content-install` in `wp-fresh-start`.
 
 ## Troubleshooting
 
