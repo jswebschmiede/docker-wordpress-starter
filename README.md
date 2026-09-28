@@ -10,6 +10,7 @@ This project provides a Docker-based development environment for WordPress. It a
 - Mailpit for email testing
 - WP-CLI for command-line management
 - Optional plugin/theme management via Make targets (clone from Git, reset folders)
+- Optional WordPress dev blueprint cloned beside `wordpress/` on the first `make wp-fresh-start`
 
 ## Prerequisites
 
@@ -29,14 +30,15 @@ cp .env.example .env
 make wp-fresh-start
 ```
 
-`make wp-fresh-start` starts the stack, installs WordPress with admin user from `.env`, resets plugins/themes, and reinstalls from `PLUGINS_GIT_URLS` / `THEMES_GIT_URLS`. Optional `.env` options: `WP_LANG` (e.g. `de_DE` for German), `PLUGINS_SLUGS` (space-separated plugin slugs from wordpress.org, installed and activated), `THEMES_KEEP` (first theme is auto-activated). Open https://127.0.0.1:6969/wp-admin and log in with `WP_ADMIN_USER` / `WP_ADMIN_PASSWORD`.
+`make wp-fresh-start` installs an optional dev blueprint when `WP_DEV_BLUEPRINT_URL` is set and the target folder is missing, then starts the stack, installs WordPress with the admin user from `.env`, resets plugins/themes, and reinstalls from `PLUGINS_GIT_URLS` / `THEMES_GIT_URLS`. Optional `.env` options: `WP_LANG` (e.g. `de_DE` for German), `PLUGINS_SLUGS` (space-separated plugin slugs from wordpress.org, installed and activated), `THEMES_KEEP` (first theme is auto-activated). Open https://127.0.0.1:6969/wp-admin and log in with `WP_ADMIN_USER` / `WP_ADMIN_PASSWORD`.
 
 Port `6969` serves HTTPS. A request to `http://127.0.0.1:6969` is redirected to `https://127.0.0.1:6969`. `https://localhost:6969` works as well.
 
 - `make up` – Start containers only. Fast, no WP setup. Also imports the local Caddy CA into the Windows user trust store when `powershell.exe` is available (WSL2). Containers do not start with the Docker daemon; start them with `make up`.
 - `make install-wp` – Install WordPress manually (e.g. after `make reset`). If WordPress is already installed, updates `home` and `siteurl` to `WP_URL`.
 - `make trust-cert` – Export the Caddy root CA and trust it. Runs automatically at the end of `make up`.
-- `make wp-fresh-start` – Full setup: up + install-wp + content-reset + content-install. Use for first run or when you need a clean content state.
+- `make wp-fresh-start` – Full setup: optional dev-blueprint install + up + install-wp + content-reset + content-install. Use for first run or when you need a clean content state.
+- `make dev-blueprint-install` – Clones `WP_DEV_BLUEPRINT_URL` into `WP_DEV_BLUEPRINT_DIR` when that folder is missing. Runs at the start of `make wp-fresh-start`.
 
 ## WP-CLI Usage
 
@@ -69,13 +71,16 @@ make wp -- theme list
 - `make themes-install`: Clones or updates repositories from `THEMES_GIT_URLS` into `wp-content/themes`
 - `make content-install`: Runs `plugins-install` and `themes-install`
 - `make content-reset`: Runs `plugins-reset` and `themes-reset`
+- `make dev-blueprint-install`: Clones `WP_DEV_BLUEPRINT_URL` into `WP_DEV_BLUEPRINT_DIR` when that folder is missing. Also runs at the start of `wp-fresh-start`.
 
 ## Structure
 
 - `docker-compose.yml` – Caddy (HTTPS), Nginx, WordPress (PHP-FPM), MySQL, phpMyAdmin, Mailpit, WP-CLI service
 - `.env.example` – Template with `WP_ADMIN_*`, `WP_LANG`, `PLUGINS_SLUGS`, `THEMES_KEEP` for `make install-wp`
 - `makefile` – `install-wp` (runs wp core install), `wp` (pass-through for any WP-CLI command)
-- `wordpress/` – WordPress files (created on first start)
+- `wordpress/` – WordPress files (created on first start, gitignored)
+- `dev-blueprint/` – Optional cloned dev blueprint (not gitignored; commit it in a project repo)
+- `scripts/dev-blueprint-install.sh` – Clone, strip nested `.git`, seed `boilerplate-theme/.env`
 - `db/` – Database files (created on first start)
 - `docker/php/conf.d/uploads.ini` – PHP upload limits configuration
 - `docker/nginx/default.conf` – Nginx site config (permalinks, PHP-FPM, upload limit, HTTPS from `X-Forwarded-Proto`). `.htaccess` is ignored here; on an Apache host WordPress still uses `.htaccess` for permalinks.
@@ -96,6 +101,28 @@ You can customize the configuration in the `.env` file to change ports, versions
 - `WP_LANG`: Locale code for WordPress core (e.g. `de_DE` for German, `en_US` default). Installed and activated during `install-wp`.
 - `PLUGINS_SLUGS`: Space-separated plugin slugs from wordpress.org (e.g. `akismet contact-form-7`). Plugins are installed and activated after `content-install` in `wp-fresh-start`.
 - `THEMES_KEEP`: Space-separated theme slugs kept during `themes-reset`. The first slug is activated automatically after `content-install` in `wp-fresh-start`.
+- `WP_DEV_BLUEPRINT_URL`: Git URL of a dev blueprint. Empty skips the clone. Example: `https://github.com/jswebschmiede/Wordpress-Dev-Blueprint.git`.
+- `WP_DEV_BLUEPRINT_DIR`: Relative folder next to `wordpress/` (default `dev-blueprint`).
+
+## Dev blueprint
+
+Set `WP_DEV_BLUEPRINT_URL` when this repository should also contain your theme and plugin source. `make wp-fresh-start` (and `make dev-blueprint-install`) clones that URL into `WP_DEV_BLUEPRINT_DIR` only when the folder is missing or empty, deletes the nested `.git`, and writes `WP_CONTENT_PATH` in `boilerplate-theme/.env` to this project's `wordpress/wp-content` when that key is missing or empty.
+
+`make reset` removes `wordpress/` and `db/` only. The blueprint folder stays.
+
+After the clone, build and sync from the blueprint package (pnpm and Composer are not run by Make):
+
+```bash
+cd dev-blueprint/boilerplate-theme
+pnpm install
+pnpm run sync:theme
+```
+
+Follow the blueprint README for rename, Composer, and plugin sync. `PLUGINS_GIT_URLS` and `THEMES_GIT_URLS` stay available for separate Git checkouts into `wp-content`. Use those only when you want that extra copy; the blueprint sync is the path for theme and plugin source that lives in this repo.
+
+Copy `dev-blueprint/cursor/` to `.cursor/` yourself if you want those Cursor rules. Make does not merge that folder, so an existing `.cursor/` is left as it is.
+
+Commit `dev-blueprint/` in the project repository, then clear `WP_DEV_BLUEPRINT_URL` unless you intend another fresh clone (delete the folder first).
 
 ## Local HTTPS
 

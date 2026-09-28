@@ -187,7 +187,14 @@ trust-cert:
 		echo "  sudo update-ca-certificates"; \
 	fi
 
-wp-fresh-start: up
+dev-blueprint-install:
+	@WP_DEV_BLUEPRINT_URL='$(WP_DEV_BLUEPRINT_URL)' \
+		WP_DEV_BLUEPRINT_DIR='$(or $(WP_DEV_BLUEPRINT_DIR),dev-blueprint)' \
+		bash scripts/dev-blueprint-install.sh
+
+wp-fresh-start:
+	@$(MAKE) dev-blueprint-install
+	@$(MAKE) up
 	@$(MAKE) install-wp
 	@$(MAKE) content-reset
 	@$(MAKE) content-install
