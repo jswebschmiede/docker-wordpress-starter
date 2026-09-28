@@ -1,0 +1,17 @@
+{
+	skip_install_trust
+	# Clients often omit SNI when connecting to an IP address.
+	default_sni 127.0.0.1
+	# Plain HTTP on the HTTPS port (host :6969) redirects to HTTPS.
+	servers :443 {
+		listener_wrappers {
+			http_redirect
+			tls
+		}
+	}
+}
+
+https://127.0.0.1, https://localhost {
+	tls internal
+	reverse_proxy nginx:80
+}

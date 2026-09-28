@@ -2,3 +2,4 @@
 db/
 wordpress/
 www/
+docker/caddy/pki/

@@ -82,6 +82,9 @@ install-wp: validate
 	@sleep 5
 	@if UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp core is-installed --allow-root 2>/dev/null; then \
 		echo "WordPress already installed."; \
+		echo "Updating home and siteurl to $(WP_URL)..."; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp option update home "$(WP_URL)" --allow-root; \
+		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp option update siteurl "$(WP_URL)" --allow-root; \
 	else \
 		UID=$$(id -u) GID=$$(id -g) docker compose run --rm wpcli wp core install \
 			--url="$(WP_URL)" \
@@ -118,8 +121,8 @@ wp:
 
 start: validate
 	@clear
-	@printf "\033[1;33m%s\033[0m\n\n" "To start your site, please jump to http://127.0.0.1:${WEB_PORT}"
-	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:${WEB_PORT}/wp-admin to open your backend."
+	@printf "\033[1;33m%s\033[0m\n\n" "To start your site, please jump to https://127.0.0.1:${WEB_PORT}"
+	@printf "\033[1;33m%s\033[0m\n\n" "Go to https://127.0.0.1:${WEB_PORT}/wp-admin to open your backend."
 	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:8080 to open phpMyAdmin."
 	@printf "\033[1;33m%s\033[0m\n\n" "Go to http://127.0.0.1:8025 to open Mailpit."
 	@printf "\033[1;33m%s\033[0m\n\n" "First run or reset: use 'make wp-fresh-start' to install WordPress and content."
@@ -127,6 +130,8 @@ start: validate
 	@printf "\033[1;34m%s\033[0m\n\n" "WORDPRESS"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Project name" "${PROJECT_NAME}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Version" "${WORDPRESS_VERSION}"
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Nginx" "${NGINX_VERSION}"
+	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Caddy" "${CADDY_VERSION}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Port" "${WEB_PORT}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Admin user" "${WP_ADMIN_USER}"
 	@printf "\033[1;34m%-30s\033[0m\033[1;104m%s\033[0m\n" " * Admin password" "${WP_ADMIN_PASSWORD}"
@@ -149,6 +154,38 @@ stop:
 up: validate
 	-@mkdir -p db wordpress
 	@UID=$$(id -u) GID=$$(id -g) docker compose up --detach
+	@$(MAKE) trust-cert
+
+trust-cert:
+	@mkdir -p docker/caddy/pki
+	@set -e; \
+	echo "Waiting for Caddy local CA..."; \
+	i=0; \
+	while [ $$i -lt 30 ]; do \
+		if UID=$$(id -u) GID=$$(id -g) docker compose exec -T caddy test -f /data/caddy/pki/authorities/local/root.crt 2>/dev/null; then \
+			break; \
+		fi; \
+		i=$$((i + 1)); \
+		sleep 1; \
+	done; \
+	UID=$$(id -u) GID=$$(id -g) docker compose exec -T caddy test -f /data/caddy/pki/authorities/local/root.crt; \
+	UID=$$(id -u) GID=$$(id -g) docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt docker/caddy/pki/root.crt; \
+	powershell=""; \
+	if command -v powershell.exe >/dev/null 2>&1; then \
+		powershell=powershell.exe; \
+	elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then \
+		powershell=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe; \
+	fi; \
+	if [ -n "$$powershell" ]; then \
+		script=$$(wslpath -w docker/caddy/trust-root.ps1); \
+		cert=$$(wslpath -w docker/caddy/pki/root.crt); \
+		"$$powershell" -NoProfile -ExecutionPolicy Bypass -File "$$script" -CertPath "$$cert"; \
+	else \
+		echo "Root CA exported to docker/caddy/pki/root.crt"; \
+		echo "powershell.exe was not found. Install the certificate into the system trust store:"; \
+		echo "  sudo cp docker/caddy/pki/root.crt /usr/local/share/ca-certificates/caddy-local-root.crt"; \
+		echo "  sudo update-ca-certificates"; \
+	fi
 
 wp-fresh-start: up
 	@$(MAKE) install-wp
