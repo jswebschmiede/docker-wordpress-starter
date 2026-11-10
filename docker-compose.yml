@@ -19,6 +19,20 @@ services:
         networks:
             - wordpress_network
 
+    # Loopback forwarder: shares the wordpress container's network namespace so that
+    # https://127.0.0.1:${WEB_PORT} (WP_URL) is reachable from PHP (WP-Cron, Duplicator, Site Health).
+    loopback:
+        image: alpine/socat:${SOCAT_VERSION:-latest}
+        container_name: ${CONTAINER_PREFIX:-wordpress}-loopback
+        network_mode: service:wordpress
+        command: tcp-listen:${WEB_PORT:-6969},fork,reuseaddr tcp-connect:caddy:443
+        depends_on:
+            wordpress:
+                condition: service_started
+            caddy:
+                condition: service_started
+        restart: unless-stopped
+
     nginx:
         image: nginx:${NGINX_VERSION:-1.30-alpine}
         container_name: ${CONTAINER_PREFIX:-wordpress}-nginx
