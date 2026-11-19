@@ -1,5 +1,12 @@
 {
 	skip_install_trust
+	# Leaf lifetime must stay below 0.2 (PKI renewal_window_ratio) × intermediate lifetime,
+	# otherwise a leaf issued right before intermediate rotation outlives its signer.
+	pki {
+		ca local {
+			intermediate_lifetime 2000d
+		}
+	}
 	# Clients often omit SNI when connecting to an IP address.
 	default_sni 127.0.0.1
 	# Plain HTTP on the HTTPS port (host :6969) redirects to HTTPS.
@@ -12,6 +19,10 @@
 }
 
 https://127.0.0.1, https://localhost {
-	tls internal
+	tls {
+		issuer internal {
+			lifetime 365d
+		}
+	}
 	reverse_proxy nginx:80
 }

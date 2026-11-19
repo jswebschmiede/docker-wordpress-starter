@@ -1,5 +1,7 @@
 include .env
 
+POWERSHELL := $(shell command -v powershell.exe 2>/dev/null || { p=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe; [ -x "$$p" ] && echo "$$p"; })
+
 # Validate required environment variables
 validate:
 	@if [ -z "$(MYSQL_ROOT_PASSWORD)" ]; then echo "Error: MYSQL_ROOT_PASSWORD is required in .env file"; exit 1; fi
@@ -170,22 +172,39 @@ trust-cert:
 	done; \
 	UID=$$(id -u) GID=$$(id -g) docker compose exec -T caddy test -f /data/caddy/pki/authorities/local/root.crt; \
 	UID=$$(id -u) GID=$$(id -g) docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt docker/caddy/pki/root.crt; \
-	powershell=""; \
-	if command -v powershell.exe >/dev/null 2>&1; then \
-		powershell=powershell.exe; \
-	elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then \
-		powershell=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe; \
-	fi; \
-	if [ -n "$$powershell" ]; then \
+	if [ -n "$(POWERSHELL)" ]; then \
 		script=$$(wslpath -w docker/caddy/trust-root.ps1); \
 		cert=$$(wslpath -w docker/caddy/pki/root.crt); \
-		"$$powershell" -NoProfile -ExecutionPolicy Bypass -File "$$script" -CertPath "$$cert"; \
+		"$(POWERSHELL)" -NoProfile -ExecutionPolicy Bypass -File "$$script" -CertPath "$$cert"; \
 	else \
 		echo "Root CA exported to docker/caddy/pki/root.crt"; \
 		echo "powershell.exe was not found. Install the certificate into the system trust store:"; \
 		echo "  sudo cp docker/caddy/pki/root.crt /usr/local/share/ca-certificates/caddy-local-root.crt"; \
 		echo "  sudo update-ca-certificates"; \
 	fi
+	@WEB_PORT='$(WEB_PORT)' bash scripts/caddy-cert-check.sh
+
+cert-reset:
+	@set -e; \
+	if [ -f docker/caddy/pki/root.crt ]; then \
+		if [ -n "$(POWERSHELL)" ]; then \
+			script=$$(wslpath -w docker/caddy/trust-root.ps1); \
+			cert=$$(wslpath -w docker/caddy/pki/root.crt); \
+			"$(POWERSHELL)" -NoProfile -ExecutionPolicy Bypass -File "$$script" -CertPath "$$cert" -Remove; \
+		else \
+			echo "powershell.exe was not found. Remove the old root from the system trust store:"; \
+			echo "  sudo rm -f /usr/local/share/ca-certificates/caddy-local-root.crt"; \
+			echo "  sudo update-ca-certificates --fresh"; \
+		fi; \
+	fi; \
+	UID=$$(id -u) GID=$$(id -g) docker compose rm --stop --force caddy; \
+	volume=$$(docker volume ls -q --filter label=com.docker.compose.project=$(PROJECT_NAME) --filter label=com.docker.compose.volume=caddy_data); \
+	if [ -n "$$volume" ]; then \
+		docker volume rm "$$volume"; \
+	fi; \
+	rm -f docker/caddy/pki/root.crt; \
+	UID=$$(id -u) GID=$$(id -g) docker compose up --detach caddy
+	@$(MAKE) --no-print-directory trust-cert
 
 dev-blueprint-install:
 	@WP_DEV_BLUEPRINT_URL='$(WP_DEV_BLUEPRINT_URL)' \

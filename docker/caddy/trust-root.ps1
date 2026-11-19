@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$CertPath
+    [string]$CertPath,
+
+    [switch]$Remove
 )
 
 $pem = Get-Content -Raw -Path $CertPath
@@ -11,8 +13,17 @@ $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('Roo
 $store.Open('ReadWrite')
 
 try {
+    # Match by thumbprint: every Caddy project uses the same subject name.
     $existing = $store.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
-    if ($existing) {
+
+    if ($Remove) {
+        if ($existing) {
+            $existing | ForEach-Object { $store.Remove($_) }
+            Write-Output "Root CA $($cert.Thumbprint) removed from the current user trust store."
+        } else {
+            Write-Output "Root CA $($cert.Thumbprint) was not in the current user trust store."
+        }
+    } elseif ($existing) {
         Write-Output 'Root CA already trusted.'
     } else {
         $store.Add($cert)

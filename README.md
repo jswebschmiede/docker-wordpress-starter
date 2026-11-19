@@ -37,6 +37,7 @@ Port `6969` serves HTTPS. A request to `http://127.0.0.1:6969` is redirected to 
 - `make up` – Start containers only. Fast, no WP setup. Also imports the local Caddy CA into the Windows user trust store when `powershell.exe` is available (WSL2). Containers do not start with the Docker daemon; start them with `make up`.
 - `make install-wp` – Install WordPress manually (e.g. after `make reset`). If WordPress is already installed, updates `home` and `siteurl` to `WP_URL`.
 - `make trust-cert` – Export the Caddy root CA and trust it. Runs automatically at the end of `make up`.
+- `make cert-reset` – Remove this project's Caddy root CA from the trust store, delete the Caddy data volume, and trust the newly generated CA.
 - `make wp-fresh-start` – Full setup: optional dev-blueprint install + up + install-wp + content-reset + content-install. Use for first run or when you need a clean content state.
 - `make dev-blueprint-install` – Clones `WP_DEV_BLUEPRINT_URL` into `WP_DEV_BLUEPRINT_DIR` when that folder is missing. Runs at the start of `make wp-fresh-start`.
 
@@ -53,7 +54,8 @@ make wp -- theme list
 ### Core
 
 - `make up`: Starts the containers and trusts the local Caddy CA
-- `make trust-cert`: Exports `docker/caddy/pki/root.crt` and installs it into the Windows current-user root store when `powershell.exe` is available
+- `make trust-cert`: Exports `docker/caddy/pki/root.crt` and installs it into the Windows current-user root store when `powershell.exe` is available. Then checks the served certificate and restarts Caddy if it has expired
+- `make cert-reset`: Hard reset of local HTTPS. Removes this project's root CA from the Windows store (by thumbprint, other projects stay trusted), deletes the Caddy data volume, starts Caddy with a new CA, and runs `trust-cert`
 - `make start`: Displays information about the running environment
 - `make stop`: Stops the containers
 - `make down`: Stops and removes the containers
@@ -126,7 +128,7 @@ Commit `dev-blueprint/` in the project repository, then clear `WP_DEV_BLUEPRINT_
 
 ## Local HTTPS
 
-Caddy issues certificates for `127.0.0.1` and `localhost` from its own CA. `make up` copies the root to `docker/caddy/pki/root.crt` and, on WSL2, adds it to the Windows current-user root store. Chrome and Edge trust that store. Restart the browser once if a certificate warning remains.
+Caddy issues certificates for `127.0.0.1` and `localhost` from its own CA. Site certificates are valid for one year (`lifetime 365d` in `docker/caddy/Caddyfile`). The intermediate is raised to `2000d` because a site certificate must stay below 20 % of the intermediate lifetime. To apply a changed lifetime to an existing install right away, run `make cert-reset`. `make up` copies the root to `docker/caddy/pki/root.crt` and, on WSL2, adds it to the Windows current-user root store. Chrome and Edge trust that store. Restart the browser once if a certificate warning remains.
 
 Firefox uses its own store. Import `docker/caddy/pki/root.crt` under Settings → Privacy & Security → Certificates → View Certificates → Authorities.
 
@@ -136,6 +138,22 @@ Without `powershell.exe`, `make trust-cert` only exports the file and prints how
 sudo cp docker/caddy/pki/root.crt /usr/local/share/ca-certificates/caddy-local-root.crt
 sudo update-ca-certificates
 ```
+
+### "Not secure" although the root CA is trusted
+
+If `make trust-cert` prints `Root CA already trusted.` but the browser still warns, the served certificate has usually expired. When the stack was stopped for more than two weeks past that expiry, Caddy deletes the expired certificate files on startup while its renewal still needs them, and keeps serving the expired certificate (`docker compose logs caddy` shows `will retry ... no such file or directory`). `make trust-cert` (and therefore `make up`) detects this and restarts Caddy, which issues a new certificate.
+
+If the warning remains, run `make cert-reset`. Windows asks for confirmation when the old root is removed and again when the new one is added. Restart the browser afterwards. Firefox needs the new `docker/caddy/pki/root.crt` imported again.
+
+### Warning on only one host after a renewal or reset
+
+`127.0.0.1` and `localhost` get separate site certificates (IP vs. DNS name) from the same root. If one of them is trusted and the other still shows "Not secure" after `make trust-cert` or `make cert-reset`, check whether Windows trusts the certificate:
+
+    curl.exe --ssl-no-revoke -s -o NUL -w "%{ssl_verify_result}\n" https://127.0.0.1:6969/
+
+`0` means the certificate is fine and the browser still holds state from the old certificate for that host (open connections or a "Proceed to 127.0.0.1 (unsafe)" exception). `--ssl-no-revoke` is needed because the local CA has no revocation endpoint.
+
+Closing the browser window is not enough, because Edge and Chrome keep running in the background (Startup boost, "Continue running background apps"). Quit the browser completely: end all `msedge.exe` or `chrome.exe` processes in Task Manager, then open the URL again. Flushing the socket pools under `edge://net-internals/#sockets` or `chrome://net-internals/#sockets` may be enough without a restart.
 
 ## Troubleshooting
 
